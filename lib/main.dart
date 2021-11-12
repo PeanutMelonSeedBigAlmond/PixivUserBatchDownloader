@@ -105,7 +105,7 @@ Future _downloadNormalArtwork(
 Future _downloadUgoira(String pid, bool r18, String path, String title) async {
   var fileName = _replaceBadCharFromFileName("(pid_$pid)${title}_ugoira.gif");
   if(File(path+"/"+fileName).existsSync()){
-    LogUtil.i("$fileName已存在，跳过");
+    LogUtil.v("$fileName已存在，跳过");
     return;
   }
   Map<String, int> durationInfo = Map<String, int>();

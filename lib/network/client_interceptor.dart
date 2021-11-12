@@ -1,4 +1,4 @@
-import 'package:dio_http/dio_http.dart';
+import 'package:dio/dio.dart';
 
 import '/config.dart';
 
@@ -13,6 +13,7 @@ class MyInterceptor extends InterceptorsWrapper{
   }
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    super.onResponse(response, handler);
+    // https://github.com/flutterchina/dio/issues/1185
+    return handler.next(response);
   }
 }

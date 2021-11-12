@@ -1,8 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:PixivUserDownload/component/ugoira_metadata.dart';
-import 'package:dio_http/adapter.dart';
-import 'package:dio_http/dio_http.dart';
+import 'package:dio/adapter.dart';
+import 'package:dio/dio.dart';
 
 import '../component/user_artworks_info.dart';
 import '../component/artwork_info.dart';
@@ -11,6 +12,9 @@ import 'client_interceptor.dart';
 
 class Client {
   late Dio _dio;
+
+  // 下载动图zip时的分块大小
+  static const FILE_THUNK_SIZE = 4 * 1024 * 1024;
 
   Client({String proxyString = "DIRECT"}) {
     var options = BaseOptions(baseUrl: "https://www.pixiv.net/", headers: {
@@ -65,7 +69,45 @@ class Client {
     await _dio.download(url, "$path/$fileName");
   }
 
-  Future downloadUgoiraZip(String url,String path,String saveFileName) async {
-    return await _dio.download(url, "$path/$saveFileName");
+  Future downloadUgoiraZip(String url, String path, String saveFileName) async {
+    var size = await _getResourceSize(url);
+    var count = size ~/ FILE_THUNK_SIZE;
+    var remain = size % FILE_THUNK_SIZE;
+    var file = File("$path/$saveFileName").openSync(mode: FileMode.write);
+
+    var tasks = <Future<Response<List<int>>>>[];
+    var start = 0;
+    var end = 0;
+    var i = 0;
+    for (; i < count; i++) {
+      start = i * FILE_THUNK_SIZE;
+      end = start + FILE_THUNK_SIZE - 1;
+      var f = _downloadFilePart(url, start, end);
+      tasks.add(f);
+    }
+    start = i * FILE_THUNK_SIZE;
+    end = start + remain - 1;
+    var f = _downloadFilePart(url, start, end);
+    tasks.add(f);
+    var result=await Future.wait(tasks);
+    for(var res in result){
+      file.writeFromSync(res.data!);
+    }
+    file.close();
+  }
+
+  Future<int> _getResourceSize(String url) async {
+    var response = await _dio.head(url);
+    var size = response.headers.value("content-length")!;
+    return Future.value(int.parse(size));
+  }
+
+  Future<Response<List<int>>> _downloadFilePart(
+      String url, int start, int end) async {
+    return await _dio.get<List<int>>(url,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {"Range": "bytes=$start-$end"},
+        ));
   }
 }
