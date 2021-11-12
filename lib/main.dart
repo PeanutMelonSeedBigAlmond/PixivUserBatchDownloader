@@ -6,24 +6,52 @@ import 'log_util.dart';
 import 'network/client.dart';
 import 'proxy_helper.dart';
 
+import 'package:PixivUserDownload/utils/ugoira_merge_util.dart';
+import 'package:PixivUserDownload/utils/ugoira_unzip_util.dart';
+
 late Client _client;
 
 void main() async {
   LogUtil.i("=" * 32);
+  await _init();
+  await _initHttpClient();
+  var uids = _readUids();
+  uids.forEach((uid) async {
+    LogUtil.i("正在下载uid:${uid}的作品");
+    try {
+      var userArtwork = await _getUserArtworksId(uid);
+      for (var artworkId in userArtwork) {
+        _client.getArtworkInfo(artworkId).then((value) async {
+          var r18 = value.body.xRestrict == 1;
+          var title = value.body.illustTitle;
+          if (value.isUgoira()) {
+            await _downloadUgoira(
+                artworkId, r18, getImageStorageDir(r18, uid), title);
+          } else {
+            await _downloadNormalArtwork(
+                artworkId, r18, getImageStorageDir(r18, uid), title);
+          }
+        }).onError((error, stackTrace) {
+          LogUtil.e("获取插画$artworkId的信息失败:$error");
+        });
+      }
+    } catch (err) {
+      LogUtil.e("下载uid:${uid}的作品失败：$err");
+    }
+  });
+}
+
+_init() async {
   _checkFileExists("uid.txt");
   _setupCookie();
   await _initHttpClient();
+}
+
+List<String> _readUids() {
   var file = File("uid.txt");
   var lines = file.readAsLinesSync();
   lines.removeWhere((element) => element == "");
-  lines.forEach((element) async {
-    LogUtil.i("正在下载uid:${element}的作品");
-    _getUserArtworksId(element).then((value) async {
-      value.forEach((pid) async {
-        await _downloadArtworkImages(element, pid);
-      });
-    }).onError((error, stackTrace) => LogUtil.e("uid:${element}作品信息获取失败"));
-  });
+  return lines;
 }
 
 _checkFileExists(String fileName) {
@@ -54,25 +82,80 @@ Future<List<String>> _getUserArtworksId(String uid) async {
   return Future(() => ids as List<String>);
 }
 
-Future _downloadArtworkImages(String uid, String pid) async {
-  var artworkInfo = await _client.getArtworkInfo(pid);
-  var r18 = artworkInfo.body.xRestrict == 1;
-  var artworkImages = await _client.getArtworkPages(pid, r18);
-  var targetDirectory = splitR18 && r18 ? "$targetDir/$uid/$r18Dir" : "$targetDir/$uid";
-  artworkImages.body.forEach((element) {
-    var url = element.urls.original;
-    var fileName = _getFileNameFromUrl(url, artworkInfo.body.illustTitle);
-    _client.downloadImage(url, targetDirectory, fileName)
-        .then((value) => LogUtil.i("下载$targetDirectory/$fileName成功"))
-    .onError((error, stackTrace) {
-      if(error is String){
-        LogUtil.w(error);
-      }else{
-        LogUtil.e("$fileName下载失败:$error");
+Future _downloadNormalArtwork(
+    String pid, bool r18, String path, String title) async {
+  return _client.getArtworkPages(pid, r18).then((value) {
+    for (var image in value.body) {
+      var url = image.urls.original;
+      var fileName = _getFileNameFromUrl(url, title);
+      if (File("$path/$fileName").existsSync()) {
+        LogUtil.v("${fileName}已经存在，跳过");
+        continue;
       }
-    });
-  });
+      _client
+          .downloadImage(url, path, fileName)
+          .then((value) => LogUtil.i("下载$fileName完成"))
+          .onError((error, stackTrace) {
+        LogUtil.e("$fileName下载失败：$error");
+      });
+    }
+  }).onError((error, stackTrace) => LogUtil.e("获取$pid图片失败：$error"));
 }
+
+Future _downloadUgoira(String pid, bool r18, String path, String title) async {
+  var fileName = _replaceBadCharFromFileName("(pid_$pid)${title}_ugoira.gif");
+  if(File(path+"/"+fileName).existsSync()){
+    LogUtil.i("$fileName已存在，跳过");
+    return;
+  }
+  Map<String, int> durationInfo = Map<String, int>();
+  return _client
+      .getUgoiraMetadata(pid, r18)
+      .then((value) {
+        for (var f in value.body.frames) {
+          durationInfo[f.file] = f.delay;
+        }
+        var zipUrl = value.body.originalSrc;
+        return zipUrl;
+      })
+      .onError((error, stackTrace) => LogUtil.e("获取动图$pid信息失败：$error"))
+      .then((value) async {
+        LogUtil.i("正在下载$pid.zip");
+        await _client.downloadUgoiraZip(value, "$tempDir", "$pid.zip");
+      })
+      .onError((error, stackTrace) => LogUtil.e("$pid.zip下载失败：$error"))
+      .then((_) async {
+        LogUtil.i("$pid.zip下载完成");
+        return await UgoiraUnzipUtil.unzipFile("$tempDir/$pid.zip", "$tempDir/$pid");
+      })
+      .onError((error, stackTrace) => LogUtil.e("解压$pid.zip失败"))
+      .then((value) {
+        var baseDir = value;
+        var frames = <GifFrames>[];
+        for (var k in durationInfo.keys) {
+          var duration = durationInfo[k]!;
+          frames.add(GifFrames.fromFile("$baseDir/$k", duration));
+        }
+        return frames;
+      })
+      .then((value) async {
+        LogUtil.i("正在合成gif：$pid");
+        return await UgoiraMergeUtil.mergeGif(value);
+      })
+      .onError((error, stackTrace) => LogUtil.e("$pid 合成gif失败：$error"))
+      .then((value) {
+        var file = File(path+"/"+fileName);
+        file.writeAsBytesSync(value);
+      })
+      .then((value) {
+        LogUtil.i("下载$pid完成");
+        File("$tempDir/$pid.zip").delete();
+        Directory("$tempDir/$pid").delete(recursive: true);
+      });
+}
+
+String getImageStorageDir(bool r18, String uid) =>
+    r18 && splitR18 ? "$targetDir/$uid/$r18Dir" : "$targetDir/$uid";
 
 String _getFileNameFromUrl(String url, String title) {
   var regex = RegExp("(\\d*)_p(\\d*)\\.([a-z]{3})");

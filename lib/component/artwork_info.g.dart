@@ -18,6 +18,7 @@ Map<String, dynamic> _$ArtworkInfoToJson(ArtworkInfo instance) =>
 _Body _$BodyFromJson(Map<String, dynamic> json) => _Body(
       json['illustId'] as String,
       json['illustTitle'] as String,
+      json['illustType'] as int,
       json['id'] as String,
       json['xRestrict'] as int,
     );
@@ -25,6 +26,7 @@ _Body _$BodyFromJson(Map<String, dynamic> json) => _Body(
 Map<String, dynamic> _$BodyToJson(_Body instance) => <String, dynamic>{
       'illustId': instance.illustId,
       'illustTitle': instance.illustTitle,
+      'illustType': instance.illustType,
       'id': instance.id,
       'xRestrict': instance.xRestrict,
     };

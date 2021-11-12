@@ -2,6 +2,11 @@
 .idea/
 .vscode/
 build/
+artworks/
 .packages
 uid.txt
 cookie.txt
+test/*
+lib/main.exe
+temp/
+Log.log

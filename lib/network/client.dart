@@ -1,13 +1,12 @@
 import 'dart:io';
 
-import 'package:PixivUserDownload/log_util.dart';
+import 'package:PixivUserDownload/component/ugoira_metadata.dart';
+import 'package:dio_http/adapter.dart';
+import 'package:dio_http/dio_http.dart';
 
 import '../component/user_artworks_info.dart';
 import '../component/artwork_info.dart';
 import '../component/artwork_images_info.dart';
-import 'package:dio/adapter.dart';
-import 'package:dio/dio.dart';
-
 import 'client_interceptor.dart';
 
 class Client {
@@ -51,15 +50,22 @@ class Client {
     return Future(() => UserArtworksInfo.fromJson(response.data));
   }
 
+  Future<UgoiraMetadata> getUgoiraMetadata(String pid, bool r18) async {
+    var url = "/ajax/illust/${pid}/ugoira_meta";
+    var option = Options(extra: {"needCookie": r18});
+    var response = await _dio.get(url, options: option);
+    return Future(() => UgoiraMetadata.fromJson(response.data));
+  }
+
   Future downloadImage(String url, String path, String fileName) async {
     var directory = Directory(path);
     if (!directory.existsSync()) {
       directory.create(recursive: true);
     }
-    var file = File("$path/$fileName");
-    if (file.existsSync()) {
-      throw("${file.path}已经存在，跳过");
-    }
-    await _dio.download(url, file.path);
+    await _dio.download(url, "$path/$fileName");
+  }
+
+  Future downloadUgoiraZip(String url,String path,String saveFileName) async {
+    return await _dio.download(url, "$path/$saveFileName");
   }
 }
