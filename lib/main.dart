@@ -1,12 +1,13 @@
 import 'dart:io';
 
+import 'package:PixivUserDownload/utils/ugoira_merge_util_opencv.dart';
+
 import 'config.dart';
 import 'log_util.dart';
 
 import 'network/client.dart';
 import 'proxy_helper.dart';
 
-import 'package:PixivUserDownload/utils/ugoira_merge_util.dart';
 import 'package:PixivUserDownload/utils/ugoira_unzip_util.dart';
 
 late Client _client;
@@ -103,8 +104,8 @@ Future _downloadNormalArtwork(
 }
 
 Future _downloadUgoira(String pid, bool r18, String path, String title) async {
-  var fileName = _replaceBadCharFromFileName("(pid_$pid)${title}_ugoira.gif");
-  if(File(path+"/"+fileName).existsSync()){
+  var fileName = _replaceBadCharFromFileName("(pid_$pid)${title}_ugoira.mp4");
+  if (File(path + "/" + fileName).existsSync()) {
     LogUtil.v("$fileName已存在，跳过");
     return;
   }
@@ -126,27 +127,26 @@ Future _downloadUgoira(String pid, bool r18, String path, String title) async {
       .onError((error, stackTrace) => LogUtil.e("$pid.zip下载失败：$error"))
       .then((_) async {
         LogUtil.i("$pid.zip下载完成");
-        return await UgoiraUnzipUtil.unzipFile("$tempDir/$pid.zip", "$tempDir/$pid");
+        return await UgoiraUnzipUtil.unzipFile(
+            "$tempDir/$pid.zip", "$tempDir/$pid");
       })
       .onError((error, stackTrace) => LogUtil.e("解压$pid.zip失败"))
       .then((value) {
         var baseDir = value;
-        var frames = <GifFrames>[];
+        var frames = <Frame>[];
         for (var k in durationInfo.keys) {
           var duration = durationInfo[k]!;
-          frames.add(GifFrames.fromFile("$baseDir/$k", duration));
+          frames.add(Frame("$baseDir/$k", duration));
         }
         return frames;
       })
       .then((value) async {
-        LogUtil.i("正在合成gif：$pid");
-        return await UgoiraMergeUtil.mergeGif(value);
+        LogUtil.i("正在合成动图：$pid");
+        var file = File(path + "/" + fileName);
+        var util = UgoiraMergeUtilOpenCV();
+        return await util.merge(value, file.path);
       })
-      .onError((error, stackTrace) => LogUtil.e("$pid 合成gif失败：$error"))
-      .then((value) {
-        var file = File(path+"/"+fileName);
-        file.writeAsBytesSync(value);
-      })
+      .onError((error, stackTrace) => LogUtil.e("$pid 合成动图失败：$error"))
       .then((value) {
         LogUtil.i("下载$pid完成");
         File("$tempDir/$pid.zip").delete();

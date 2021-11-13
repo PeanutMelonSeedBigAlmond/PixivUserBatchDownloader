@@ -1,0 +1,6 @@
+output: 'lib/dll/native_library.g.dart'
+headers:
+  entry-points:
+    - 'header/header.h'
+llvm-path:
+  - 'E:\Program Files\LLVM'
