@@ -21,10 +21,12 @@
 
     - `cookie.txt`  你自己的Pixiv Cookie，用于获取用户作品列表以及获取R-18作品信息
 
-3. 之后可以直接运行exe或者使用计划任务定时运行
+3. 由于使用了OpenCV的依赖，需要在 [Release页面](https://github.com/PeanutMelonSeedBigAlmond/PixivUserBatchDownloader/releases)下载随附的`library.zip`，解压后将所有的dll放到exe同级目录
+   
+4. 之后可以直接运行exe或者使用计划任务定时运行
 
 # 注意
 
-程序会使用CMD命令查询注册表以获取系统代理，因此如果在Linux下编译运行可能会有意外的错误
+程序会使用CMD命令查询注册表以获取系统代理，因此如果在Linux下编译运行可能会有意外的错误，这会导致**Linux系统下始终为直连**
 
 目前不支持手动设置代理
