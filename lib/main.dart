@@ -6,16 +6,14 @@ import 'config.dart';
 import 'log_util.dart';
 
 import 'network/client.dart';
-import 'proxy_helper.dart';
 
 import 'package:PixivUserDownload/utils/ugoira_unzip_util.dart';
 
-late Client _client;
+Client _client=Client();
 
 void main() async {
   LogUtil.i("=" * 32);
   await _init();
-  await _initHttpClient();
   var uids = _readUids();
   uids.forEach((uid) async {
     LogUtil.i("正在下载uid:${uid}的作品");
@@ -45,7 +43,6 @@ void main() async {
 _init() async {
   _checkFileExists("uid.txt");
   _setupCookie();
-  await _initHttpClient();
 }
 
 List<String> _readUids() {
@@ -67,11 +64,6 @@ _setupCookie() {
   _checkFileExists("cookie.txt");
   var file = File("cookie.txt");
   cookie = file.readAsStringSync().trim();
-}
-
-_initHttpClient() async {
-  var proxy = await ProxyHelper.getSystemProxy();
-  _client = Client(proxyString: proxy);
 }
 
 Future<List<String>> _getUserArtworksId(String uid) async {

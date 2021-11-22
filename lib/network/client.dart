@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:PixivUserDownload/component/ugoira_metadata.dart';
+import 'package:PixivUserDownload/network/pixivcat_interceptor.dart';
 import 'package:dio/adapter.dart';
 import 'package:dio/dio.dart';
 
@@ -13,23 +14,28 @@ import 'client_interceptor.dart';
 class Client {
   late Dio _dio;
 
+  static const PIXIV_HOST_IP = "https://210.140.131.219";
+
   // 下载动图zip时的分块大小
   static const FILE_THUNK_SIZE = 4 * 1024 * 1024;
 
-  Client({String proxyString = "DIRECT"}) {
-    var options = BaseOptions(baseUrl: "https://www.pixiv.net/", headers: {
+  Client() {
+    // Thanks for @Notsfsssf
+    // https://github.com/Notsfsssf/pixez-flutter/issues/63
+    var options = BaseOptions(baseUrl: PIXIV_HOST_IP, headers: {
+      "host": "www.pixiv.net",
       "referer": "https://www.pixiv.net/",
       "user-agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36",
       "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7,zh-TW;q=0.6"
     });
     _dio = Dio(options);
-    _dio.interceptors.add(MyInterceptor());
+    _dio.interceptors
+      ..add(MyInterceptor())
+      ..add(PixivCatInterceptor());
     (_dio.httpClientAdapter as DefaultHttpClientAdapter).onHttpClientCreate =
         (client) {
-      client.findProxy = (uri) {
-        return proxyString;
-      };
+      client.badCertificateCallback = (_, __, ___) => true;
       return client;
     };
   }
@@ -89,8 +95,8 @@ class Client {
     end = start + remain - 1;
     var f = _downloadFilePart(url, start, end);
     tasks.add(f);
-    var result=await Future.wait(tasks);
-    for(var res in result){
+    var result = await Future.wait(tasks);
+    for (var res in result) {
       file.writeFromSync(res.data!);
     }
     file.close();
